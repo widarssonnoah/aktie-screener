@@ -1,0 +1,46 @@
+name: Update Stock Screener
+
+on:
+  schedule:
+    - cron: '30 7 * * 1-5'   # ~09:30/08:30 svensk tid
+    - cron: '30 11 * * 1-5'  # ~13:30/12:30 svensk tid
+    - cron: '30 15 * * 1-5'  # ~17:30/16:30 svensk tid
+    - cron: '30 19 * * 1-5'  # ~21:30/20:30 svensk tid
+  workflow_dispatch:  # gör att du kan köra manuellt via GitHub-gränssnittet också
+
+concurrency:
+  group: screener-update
+  cancel-in-progress: false  # om en körning drar ut på tiden, kö:a nästa istället för att krocka
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener collector
+        run: python score_screener_collector.py
+
+      - name: Publish HTML as index.html
+        run: |
+          LATEST=$(ls -t ScoreScreener_Output/score_screener_*.html | head -n 1)
+          cp "$LATEST" index.html
+
+      - name: Commit and push updated site
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Auto-update screener data $(date -u +'%Y-%m-%d %H:%M UTC')" || echo "Inga ändringar att committa"
+          git push

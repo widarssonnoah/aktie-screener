@@ -784,16 +784,142 @@ function clearAll() {
     renderTable();
 }
 
-function applyPreset() {
-    CONFIG = {
-        'PE':           {lo: 5,  hi: 15, w: 1},
-        'PB':           {lo: 0.5, hi: 2, w: 1},
-        'ROE':          {lo: 12, hi: 40, w: 1},
-        'DivYield':     {lo: 2,  hi: 6,  w: 1},
-        'DebtToEquity': {lo: 0,  hi: 80, w: 1},
-        'RSI14':        {lo: 45, hi: 65, w: 1},
-        'Dist_SMA200':  {lo: 2,  hi: 20, w: 1},
-    };
+const PRESETS = {
+  value: {
+    'PE':           {lo: 5,  hi: 15, w: 1},
+    'PB':           {lo: 0.5, hi: 2, w: 1},
+    'ROE':          {lo: 12, hi: 40, w: 1},
+    'DivYield':     {lo: 2,  hi: 6,  w: 1},
+    'DebtToEquity': {lo: 0,  hi: 80, w: 1},
+    'RSI14':        {lo: 45, hi: 65, w: 1},
+    'Dist_SMA200':  {lo: 2,  hi: 20, w: 1},
+  },
+  turnaround: {
+    'RSI14': {lo: 35, hi: 52, w: 1.5},
+    'RSI_slope5': {lo: 5, hi: 30, w: 1.5},
+    'StochK': {lo: 20, hi: 55, w: 1},
+    'StochD': {lo: 20, hi: 55, w: 1},
+    'CMF': {lo: 0.03, hi: 0.35, w: 1.5},
+    'OBV_diff_pct': {lo: 0, hi: 20, w: 1},
+    'UpDnVol': {lo: 1.1, hi: 3, w: 1},
+    'VolRatio': {lo: 1.1, hi: 2.8, w: 1},
+    'Dist_52wLow': {lo: 0, hi: 25, w: 1},
+    'Dist_52wHigh': {lo: -65, hi: -15, w: 0.5},
+    'p1w': {lo: 0, hi: 10, w: 1},
+    'p1m': {lo: -8, hi: 15, w: 1},
+    'p3m': {lo: -40, hi: 5, w: 0.5},
+    'ADX': {lo: 10, hi: 28, w: 0.5},
+    'DI_diff': {lo: -5, hi: 15, w: 1},
+    'Dist_SMA50': {lo: -15, hi: 5, w: 1},
+    'Dist_EMA21': {lo: -10, hi: 5, w: 1},
+    'BB_pctB': {lo: 0.2, hi: 0.65, w: 1},
+    'DebtToEquity': {lo: 0, hi: 150, w: 0.5},
+    'CurrentRatio': {lo: 0.8, hi: 4, w: 0.5},
+  },
+  breakout: {
+    'BB_bw': {lo: 0.01, hi: 0.08, w: 1.5},
+    'Squeeze': {lo: 1, hi: 1, w: 1.5},
+    'ATR_pct': {lo: 1, hi: 4, w: 1},
+    'Dist_52wHigh': {lo: -15, hi: 0, w: 1.5},
+    'VolRatio': {lo: 1.2, hi: 3, w: 1.5},
+    'RSI14': {lo: 55, hi: 70, w: 1},
+    'ADX': {lo: 15, hi: 30, w: 1},
+    'DI_diff': {lo: 0, hi: 20, w: 1},
+    'Dist_EMA9': {lo: 0, hi: 5, w: 1},
+    'Dist_EMA21': {lo: -2, hi: 8, w: 1},
+    'BB_pctB': {lo: 0.7, hi: 1, w: 1},
+    'StochK': {lo: 60, hi: 90, w: 1},
+    'StochD': {lo: 55, hi: 85, w: 0.5},
+    'CMF': {lo: 0.05, hi: 0.3, w: 1},
+    'p1w': {lo: 0, hi: 8, w: 1},
+    'p1m': {lo: -2, hi: 15, w: 1},
+    'UpDnVol': {lo: 1.2, hi: 3.5, w: 1},
+  },
+  trend: {
+    'ADX': {lo: 25, hi: 60, w: 1.5},
+    'DI_diff': {lo: 10, hi: 40, w: 1.5},
+    'RS21': {lo: 5, hi: 50, w: 1.5},
+    'RS_acc': {lo: 0, hi: 20, w: 1},
+    'Dist_EMA21': {lo: 0, hi: 10, w: 1},
+    'Dist_EMA50': {lo: 0, hi: 15, w: 1},
+    'Dist_SMA200': {lo: 5, hi: 40, w: 1},
+    'p1m': {lo: 2, hi: 20, w: 1},
+    'p3m': {lo: 5, hi: 40, w: 1},
+    'p6m': {lo: 10, hi: 60, w: 1},
+    'p12m': {lo: 10, hi: 100, w: 0.5},
+    'RSI14': {lo: 50, hi: 75, w: 1},
+    'Dist_52wHigh': {lo: -10, hi: 0, w: 1},
+    'OBV_diff_pct': {lo: 5, hi: 40, w: 1},
+    'CMF': {lo: 0.05, hi: 0.3, w: 1},
+    'UpDnVol': {lo: 1.2, hi: 4, w: 1},
+  },
+  stable: {
+    'PE': {lo: 10, hi: 30, w: 1},
+    'ForwardPE': {lo: 10, hi: 28, w: 1},
+    'PB': {lo: 1, hi: 8, w: 0.5},
+    'PEG': {lo: 0.5, hi: 2.5, w: 1},
+    'ROE': {lo: 15, hi: 40, w: 1.5},
+    'ROA': {lo: 5, hi: 20, w: 1},
+    'ProfitMargin': {lo: 10, hi: 40, w: 1},
+    'OpMargin': {lo: 10, hi: 35, w: 1},
+    'GrossMargin': {lo: 30, hi: 80, w: 0.5},
+    'DebtToEquity': {lo: 0, hi: 100, w: 1.5},
+    'CurrentRatio': {lo: 1, hi: 3, w: 1},
+    'DivYield': {lo: 0, hi: 5, w: 0.5},
+    'PayoutRatio': {lo: 0, hi: 70, w: 0.5},
+    'EarnGrowth': {lo: 0, hi: 25, w: 1},
+    'RevGrowth': {lo: 0, hi: 20, w: 1},
+    'Beta': {lo: 0.5, hi: 1.3, w: 1.5},
+    'AnalystUpside': {lo: 0, hi: 30, w: 0.5},
+    'RecMean': {lo: 1, hi: 2.5, w: 0.5},
+    'ATR_pct': {lo: 0, hi: 4, w: 0.5},
+    'Dist_SMA200': {lo: -5, hi: 20, w: 0.5},
+    'RSI14': {lo: 30, hi: 70, w: 0.3},
+  },
+  dividend: {
+    'DivYield': {lo: 3, hi: 8, w: 2},
+    'PayoutRatio': {lo: 20, hi: 65, w: 1.5},
+    'DebtToEquity': {lo: 0, hi: 90, w: 1.5},
+    'CurrentRatio': {lo: 1, hi: 3, w: 1},
+    'ROE': {lo: 10, hi: 35, w: 1},
+    'ProfitMargin': {lo: 5, hi: 35, w: 1},
+    'Beta': {lo: 0.3, hi: 1.1, w: 1.5},
+    'PE': {lo: 8, hi: 22, w: 1},
+    'EarnGrowth': {lo: -5, hi: 15, w: 0.5},
+    'RecMean': {lo: 1, hi: 2.8, w: 0.5},
+  },
+  deepvalue: {
+    'PE': {lo: 3, hi: 10, w: 1.5},
+    'PB': {lo: 0.2, hi: 1, w: 1.5},
+    'PS': {lo: 0.2, hi: 1.2, w: 1},
+    'EV_EBITDA': {lo: 2, hi: 7, w: 1},
+    'PEG': {lo: 0, hi: 1.2, w: 1},
+    'DebtToEquity': {lo: 0, hi: 100, w: 1},
+    'CurrentRatio': {lo: 1, hi: 4, w: 1},
+    'ROE': {lo: 5, hi: 30, w: 0.5},
+    'DivYield': {lo: 0, hi: 10, w: 0.5},
+    'Dist_52wLow': {lo: 0, hi: 30, w: 1},
+  },
+  momentum: {
+    'p1w': {lo: 3, hi: 20, w: 1.5},
+    'p1m': {lo: 8, hi: 40, w: 1.5},
+    'p3m': {lo: 15, hi: 80, w: 1.5},
+    'p6m': {lo: 25, hi: 120, w: 1},
+    'p12m': {lo: 30, hi: 200, w: 1},
+    'RS21': {lo: 15, hi: 60, w: 1.5},
+    'RS_acc': {lo: 5, hi: 30, w: 1},
+    'ADX': {lo: 25, hi: 65, w: 1},
+    'DI_diff': {lo: 15, hi: 45, w: 1},
+    'RSI14': {lo: 60, hi: 85, w: 1},
+    'VolRatio': {lo: 1.3, hi: 4, w: 1},
+    'OBV_diff_pct': {lo: 10, hi: 50, w: 1},
+    'Dist_52wHigh': {lo: -8, hi: 0, w: 1},
+  },
+};
+
+function applyPreset(name) {
+    if (!name || !PRESETS[name]) return;
+    CONFIG = JSON.parse(JSON.stringify(PRESETS[name]));  // djup kopia
     applyConfigToUI();
     renderTable();
 }
@@ -810,7 +936,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('exportSettingsBtn').addEventListener('click', exportSettings);
     document.getElementById('importSettingsBtn').addEventListener('click', importSettings);
     document.getElementById('clearBtn').addEventListener('click', clearAll);
-    document.getElementById('presetBtn').addEventListener('click', applyPreset);
+    document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
     document.querySelectorAll('th[data-sort]').forEach(th => {
         th.addEventListener('click', () => {
             const key = th.dataset.sort;
@@ -835,7 +961,16 @@ def generate_html(records: list, datum_str: str) -> str:
 
     parts.append('<div class="panel">'
                  '<div class="toolbar">'
-                 '<button id="presetBtn">Exempel: klassisk value-preset</button>'
+                 '<select id="presetSelect"><option value="">— Välj ett preset —</option>'
+                 '<option value="value">Klassisk value</option>'
+                 '<option value="turnaround">Turnaround-kandidater</option>'
+                 '<option value="breakout">Breakout — snart utbrott</option>'
+                 '<option value="trend">Ren trendföljande</option>'
+                 '<option value="stable">Stora stabila bolag — köp & håll</option>'
+                 '<option value="dividend">Utdelningsportfölj</option>'
+                 '<option value="deepvalue">Deep value / contrarian</option>'
+                 '<option value="momentum">Momentum / aggressiv tillväxt</option>'
+                 '</select>'
                  '<button id="clearBtn">Rensa alla intervall</button>'
                  '</div>'
                  '<div id="settingsRoot"></div>'

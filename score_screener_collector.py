@@ -502,10 +502,13 @@ textarea{width:100%;background:#010409;border:1px solid var(--border);color:var(
 """
 
 _JS = r"""
-// ── Poängsättningsformel ────────────────────────────────────────────────────
-// Inom [lo,hi] = 100 poäng. Utanför avtar poängen exponentiellt: en förflyttning
-// lika stor som intervallets bredd halverar ungefär poängen. Om lo==hi (exakt
-// målvärde) används 10% av målvärdets storlek som referensbredd istället.
+// Poängsättningsformel — S-formad (logistisk) avklingning.
+// Inom [lo,hi] = 100. Utanför avtar poängen enligt en sigmoid: långsamt
+// nära kanten, snabbast runt DECAY_MIDPOINT (mätt i antal intervallbredder
+// från kanten), och planar sedan ut mot 0 långt bort.
+const DECAY_STEEPNESS = 7;    // högre = skarpare "knä"
+const DECAY_MIDPOINT  = 0.65; // var (i intervallbredder) nedgången är som snabbast
+
 function metricScore(value, lo, hi) {
     if (value === null || value === undefined || isNaN(value)) return null;
     if (value >= lo && value <= hi) return 100;
@@ -513,7 +516,7 @@ function metricScore(value, lo, hi) {
     if (width < 1e-9) width = Math.max(Math.abs(hi) * 0.1, 0.5);
     const dist = value < lo ? (lo - value) : (value - hi);
     const norm = dist / width;
-    let score = 100 * Math.pow(0.5, norm);
+    let score = 100 / (1 + Math.exp(DECAY_STEEPNESS * (norm - DECAY_MIDPOINT)));
     if (score < 0.5) score = 0;
     return Math.min(100, Math.max(0, score));
 }

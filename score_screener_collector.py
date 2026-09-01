@@ -15,24 +15,10 @@
 ║  All poängsättning sker sedan i HTML-filen, i din webbläsare, i realtid:    ║
 ║  Du sätter ett "idealintervall" (min–max) för valfria nyckeltal. Värden     ║
 ║  INOM intervallet = 100 poäng. Värden UTANFÖR avtar poängen — ju längre     ║
-║  bort, desto lägre — enligt en jämn avklingningskurva där ett steg lika     ║
-║  stort som intervallets bredd ungefär halverar poängen.                    ║
-║                                                                              ║
-║  Exempel: P/E-tal, idealintervall 5–15.                                     ║
-║    P/E 10  → 100 poäng (inom intervallet)                                   ║
-║    P/E 16  → ~93 poäng (precis utanför — nästan 100)                        ║
-║    P/E 25  → ~50 poäng (en hel intervallbredd bortom gränsen)               ║
-║    P/E 45  → ~6  poäng (tre intervallbredder bortom)                        ║
+║  bort, desto lägre — enligt en S-formad (logistisk) avklingningskurva.      ║
 ║                                                                              ║
 ║  Ett TOMT fält = nyckeltalet räknas inte med i totalpoängen alls (varken    ║
-║  positivt eller negativt). En etta i min ELLER max = 0 är ett GILTIGT       ║
-║  målvärde (t.ex. "vill ha kursen 0-10% över SMA50") — skiljer sig från      ║
-║  tomt fält, som betyder "bry dig inte om det här nyckeltalet".              ║
-║                                                                              ║
-║  Om ett nyckeltal saknas för en specifik aktie (t.ex. P/E för ett bolag     ║
-║  utan vinst) och du HAR satt ett intervall för det: den aktien får 0 poäng  ║
-║  på just det nyckeltalet (visas som "–" i tabellen) — men bara om du valt   ║
-║  att inkludera nyckeltalet. Håll koll på "N/A"-antalet per nyckeltal i UI:t.║
+║  positivt eller negativt).                                                  ║
 ║                                                                              ║
 ║  DATAKÄLLOR (gratis):                                                       ║
 ║  - Teknisk data: prishistorik via yfinance (samma motor som               ║
@@ -244,7 +230,9 @@ def extract_technical_metrics(tc: TickerCache, i: int, min_vol: float) -> Option
     clean = {k: round(float(v), 4) for k, v in vals.items() if v is not None and not np.isnan(v)}
     clean['_Kurs'] = round(float(kurs), 4)
     return clean
-    def extract_chart_series(tc: TickerCache, i: int, lookback: int = 200) -> dict:
+
+
+def extract_chart_series(tc: TickerCache, i: int, lookback: int = 200) -> dict:
     """
     Komprimerad priskurve-historik för graf-funktionen i webbläsaren.
     Endast stängningskurs + volym sparas (inte OHLC) för att hålla
@@ -427,7 +415,7 @@ def build_records(ticker_cache: dict, datum, min_vol: float, fund_data: dict) ->
             tech = None
         if tech is None:
             continue
-               kurs = tech.pop('_Kurs')
+        kurs = tech.pop('_Kurs')
         metrics = dict(tech)
         metrics.update(fund_data.get(ticker, {}))
         hist = extract_chart_series(tc, i)
@@ -527,7 +515,7 @@ footer{margin-top:24px;color:#6e7681;font-size:11px;text-align:center;}
 .count{color:var(--muted);font-size:12px;}
 textarea{width:100%;background:#010409;border:1px solid var(--border);color:var(--text);
          border-radius:7px;padding:8px;font-size:11px;font-family:monospace;min-height:70px;}
-         .chartwrap{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;}
+.chartwrap{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;}
 .chartcontrols{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
 .chartcontrols button{padding:4px 10px;font-size:11px;}
 .chartcontrols button.active{background:#238636;border-color:#2ea043;color:#fff;}
@@ -602,6 +590,7 @@ function fmtVal(v, dec, unit) {
 
 let SORT_KEY = '_total', SORT_DIR = -1;
 let EXPANDED = new Set();
+
 // ═══════════════════════════════════════════════════════════════════
 //  GRAF-MOTOR — prisgraf med teknisk analys, ritad direkt i canvas.
 //  Alla overlays (EMA/SMA/Bollinger/Fibonacci/zigzag/volatilitetstratt)

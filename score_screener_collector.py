@@ -1024,6 +1024,7 @@ function renderTable() {
             dtr.className = 'detailrow';
             const td = document.createElement('td');
             td.colSpan = 7;
+            td.appendChild(renderChartBlock(s.rec));
             const grid = document.createElement('div');
             grid.className = 'detailgrid';
             const active = getActiveMetrics();

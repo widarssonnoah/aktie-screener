@@ -427,15 +427,19 @@ def build_records(ticker_cache: dict, datum, min_vol: float, fund_data: dict) ->
             tech = None
         if tech is None:
             continue
-        kurs = tech.pop('_Kurs')
+               kurs = tech.pop('_Kurs')
         metrics = dict(tech)
         metrics.update(fund_data.get(ticker, {}))
-        records.append({
+        hist = extract_chart_series(tc, i)
+        rec = {
             'Ticker': ticker.strip(), 'Namn': _NAMN.get(ticker, ticker).strip(),
             'Land': _LAND.get(ticker, '?').strip(), 'Sektor': _SEKTOR.get(ticker, '?').strip(),
             'Cap': _CAP.get(ticker, '?'), 'Kurs': kurs,
             'metrics': metrics,
-        })
+        }
+        if hist is not None:
+            rec['hist'] = hist
+        records.append(rec)
     records.sort(key=lambda r: r['Ticker'])
     return records
 

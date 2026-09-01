@@ -602,6 +602,278 @@ function fmtVal(v, dec, unit) {
 
 let SORT_KEY = '_total', SORT_DIR = -1;
 let EXPANDED = new Set();
+// ═══════════════════════════════════════════════════════════════════
+//  GRAF-MOTOR — prisgraf med teknisk analys, ritad direkt i canvas.
+//  Alla overlays (EMA/SMA/Bollinger/Fibonacci/zigzag/volatilitetstratt)
+//  beräknas här i webbläsaren utifrån stängningskurser — ingen extra
+//  data behöver skickas från servern utöver close-priset.
+// ═══════════════════════════════════════════════════════════════════
+
+const RANGE_DAYS = {'1M': 21, '3M': 63, '6M': 126, 'ALLT': 99999};
+let CHART_STATE = {};   // { ticker: {range: '3M'} }
+
+function ema(arr, period) {
+    const k = 2 / (period + 1);
+    const out = new Array(arr.length).fill(null);
+    let prev = null;
+    for (let i = 0; i < arr.length; i++) {
+        const v = arr[i];
+        if (v === null) { out[i] = prev; continue; }
+        prev = (prev === null) ? v : v * k + prev * (1 - k);
+        out[i] = prev;
+    }
+    return out;
+}
+
+function sma(arr, period) {
+    const out = new Array(arr.length).fill(null);
+    for (let i = 0; i < arr.length; i++) {
+        if (i < period - 1) continue;
+        let sum = 0, n = 0, bad = false;
+        for (let j = i - period + 1; j <= i; j++) {
+            if (arr[j] === null) { bad = true; break; }
+            sum += arr[j]; n++;
+        }
+        out[i] = bad ? null : sum / n;
+    }
+    return out;
+}
+
+function stddev(arr, period, meanArr) {
+    const out = new Array(arr.length).fill(null);
+    for (let i = 0; i < arr.length; i++) {
+        if (i < period - 1 || meanArr[i] === null) continue;
+        let sum = 0, n = 0, bad = false;
+        for (let j = i - period + 1; j <= i; j++) {
+            if (arr[j] === null) { bad = true; break; }
+            sum += Math.pow(arr[j] - meanArr[i], 2); n++;
+        }
+        out[i] = bad ? null : Math.sqrt(sum / n);
+    }
+    return out;
+}
+
+// Enkel zigzag: hittar sving-högsta/lägsta med minst `pct` % reversering.
+// Detta är EN HEURISTIK för att visualisera möjlig vågstruktur — inte en
+// exakt Elliott Wave-räkning, vilket ingen algoritm kan göra objektivt.
+function zigzag(closes, pct = 6) {
+    const pivots = [];
+    if (closes.length < 3) return pivots;
+    let lastPivotIdx = 0, lastPivotVal = closes[0], dir = 0;
+    for (let i = 1; i < closes.length; i++) {
+        const c = closes[i];
+        if (c === null) continue;
+        const chg = (c - lastPivotVal) / lastPivotVal * 100;
+        if (dir >= 0 && chg <= -pct) {
+            pivots.push({i: lastPivotIdx, v: lastPivotVal, type: 'high'});
+            dir = -1; lastPivotIdx = i; lastPivotVal = c;
+        } else if (dir <= 0 && chg >= pct) {
+            pivots.push({i: lastPivotIdx, v: lastPivotVal, type: 'low'});
+            dir = 1; lastPivotIdx = i; lastPivotVal = c;
+        } else {
+            if (dir >= 0 && c > lastPivotVal) { lastPivotVal = c; lastPivotIdx = i; }
+            if (dir <= 0 && c < lastPivotVal) { lastPivotVal = c; lastPivotIdx = i; }
+        }
+    }
+    pivots.push({i: closes.length - 1, v: lastPivotVal, type: dir >= 0 ? 'high' : 'low'});
+    return pivots;
+}
+
+function fibLevels(hi, lo) {
+    const diff = hi - lo;
+    return [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1].map(r => hi - diff * r);
+}
+
+function drawChart(canvas, rec, range) {
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const hist = rec.hist;
+    if (!hist || !hist.c || hist.c.length < 20) {
+        ctx.fillStyle = '#6e7681';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('Ingen historikdata tillgänglig för denna aktie.', 10, H / 2);
+        return;
+    }
+
+    const days = RANGE_DAYS[range] || 63;
+    const full = hist.c;
+    const closes = full.slice(Math.max(0, full.length - days));
+    const n = closes.length;
+
+    const emA9 = ema(closes, 9), emA21 = ema(closes, 21), emA50 = ema(closes, 50);
+    const smA200 = sma(closes, Math.min(200, n - 1 || 1));
+    const bbMid = sma(closes, 20);
+    const bbSd = stddev(closes, 20, bbMid);
+    const bbUp = bbMid.map((m, i) => (m !== null && bbSd[i] !== null) ? m + 2 * bbSd[i] : null);
+    const bbLo = bbMid.map((m, i) => (m !== null && bbSd[i] !== null) ? m - 2 * bbSd[i] : null);
+
+    const pivots = zigzag(closes, 6);
+    let fibs = [];
+    if (pivots.length >= 2) {
+        const last2 = pivots.slice(-2);
+        const hiP = last2.find(p => p.type === 'high') || last2[0];
+        const loP = last2.find(p => p.type === 'low') || last2[1];
+        if (hiP && loP && hiP.v > loP.v) fibs = fibLevels(hiP.v, loP.v);
+    }
+
+    const lastPrice = closes[n - 1];
+    const atrPct = (rec.metrics.ATR_pct || 2) / 100;
+    const projDays = {1: 21, 3: 63};
+    const cones = Object.keys(projDays).map(m => {
+        const d = projDays[m];
+        const move = lastPrice * atrPct * Math.sqrt(d) * 0.6;
+        return {months: m, days: d, hi: lastPrice + move, lo: Math.max(0.01, lastPrice - move)};
+    });
+
+    const allVals = closes.concat(bbUp, bbLo).filter(v => v !== null && v !== undefined)
+        .concat(cones.map(c => c.hi)).concat(cones.map(c => c.lo));
+    const vmin = Math.min(...allVals) * 0.98, vmax = Math.max(...allVals) * 1.02;
+
+    const padL = 46, padR = Math.max(70, W * 0.16), padT = 10, padB = 20;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const xAt = i => padL + (i / (n - 1)) * plotW;
+    const yAt = v => padT + plotH - ((v - vmin) / (vmax - vmin)) * plotH;
+
+    // Rutnät + y-axeletiketter
+    ctx.strokeStyle = '#21262d'; ctx.fillStyle = '#6e7681'; ctx.font = '10px sans-serif';
+    ctx.lineWidth = 1;
+    for (let g = 0; g <= 4; g++) {
+        const v = vmin + (vmax - vmin) * g / 4;
+        const y = yAt(v);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.fillText(v.toFixed(v < 10 ? 3 : v < 100 ? 2 : 1), 2, y + 3);
+    }
+
+    function plotLine(arr, color, width, dash) {
+        ctx.strokeStyle = color; ctx.lineWidth = width;
+        ctx.setLineDash(dash || []);
+        ctx.beginPath();
+        let started = false;
+        for (let i = 0; i < n; i++) {
+            if (arr[i] === null || arr[i] === undefined) { started = false; continue; }
+            const x = xAt(i), y = yAt(arr[i]);
+            if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Bollinger-band (fyllning)
+    ctx.fillStyle = 'rgba(88,166,255,0.06)';
+    ctx.beginPath();
+    let first = true;
+    for (let i = 0; i < n; i++) {
+        if (bbUp[i] === null) continue;
+        const x = xAt(i);
+        if (first) { ctx.moveTo(x, yAt(bbUp[i])); first = false; } else ctx.lineTo(x, yAt(bbUp[i]));
+    }
+    for (let i = n - 1; i >= 0; i--) {
+        if (bbLo[i] === null) continue;
+        ctx.lineTo(xAt(i), yAt(bbLo[i]));
+    }
+    ctx.closePath(); ctx.fill();
+    plotLine(bbUp, 'rgba(88,166,255,0.35)', 1);
+    plotLine(bbLo, 'rgba(88,166,255,0.35)', 1);
+
+    // Fibonacci-nivåer
+    ctx.font = '9px sans-serif';
+    fibs.forEach(lv => {
+        if (lv < vmin || lv > vmax) return;
+        const y = yAt(lv);
+        ctx.strokeStyle = 'rgba(210,153,34,0.4)'; ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#d29922';
+        ctx.fillText(lv.toFixed(2), W - padR + 3, y + 3);
+    });
+
+    // Volatilitetstratt 1M/3M (statistisk räckvidd, EJ prognos)
+    cones.forEach((c, idx) => {
+        const xEnd = Math.min(W - padR + 20 + idx * 16, W - 4);
+        ctx.strokeStyle = idx === 0 ? 'rgba(63,185,80,0.55)' : 'rgba(210,153,34,0.55)';
+        ctx.lineWidth = 1; ctx.setLineDash([2, 2]);
+        ctx.beginPath(); ctx.moveTo(xAt(n - 1), yAt(c.hi)); ctx.lineTo(xEnd, yAt(c.hi)); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(xAt(n - 1), yAt(c.lo)); ctx.lineTo(xEnd, yAt(c.lo)); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = idx === 0 ? '#3fb950' : '#d29922';
+        ctx.fillText(c.months + 'M: ' + c.lo.toFixed(1) + '–' + c.hi.toFixed(1), xEnd - 58, yAt(c.hi) - 3);
+    });
+
+    // Glidande medelvärden
+    plotLine(smA200, '#8b5cf6', 1.3);
+    plotLine(emA50, '#d29922', 1.2);
+    plotLine(emA21, '#58a6ff', 1.2);
+    plotLine(emA9, '#3fb950', 1);
+
+    // Zigzag / möjlig vågstruktur (subjektiv)
+    ctx.strokeStyle = 'rgba(248,81,73,0.5)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    pivots.forEach((p, idx) => {
+        const x = xAt(p.i), y = yAt(p.v);
+        if (idx === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        ctx.fillStyle = '#f85149';
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill();
+    });
+    ctx.stroke();
+
+    // Prislinje (huvudlinje, alltid överst)
+    plotLine(closes, '#e6edf3', 1.6);
+
+    // Sista pris-punkt
+    const lastX = xAt(n - 1), lastY = yAt(lastPrice);
+    ctx.fillStyle = '#e6edf3';
+    ctx.beginPath(); ctx.arc(lastX, lastY, 3, 0, 7); ctx.fill();
+}
+
+function renderChartBlock(rec) {
+    const key = rec.Ticker;
+    if (!CHART_STATE[key]) CHART_STATE[key] = {range: '3M'};
+    const div = document.createElement('div');
+    div.className = 'chartwrap';
+    div.innerHTML =
+        '<div class="chartcontrols">' +
+        ['1M', '3M', '6M', 'ALLT'].map(r =>
+            '<button data-range="' + r + '" class="' + (CHART_STATE[key].range === r ? 'active' : '') + '">' + r + '</button>'
+        ).join('') +
+        '</div>' +
+        '<canvas class="chartcanvas"></canvas>' +
+        '<div class="chartlegend">' +
+        '<span><i class="sw" style="background:#e6edf3"></i>Pris</span>' +
+        '<span><i class="sw" style="background:#3fb950"></i>EMA9</span>' +
+        '<span><i class="sw" style="background:#58a6ff"></i>EMA21</span>' +
+        '<span><i class="sw" style="background:#d29922"></i>EMA50</span>' +
+        '<span><i class="sw" style="background:#8b5cf6"></i>SMA200</span>' +
+        '<span><i class="sw" style="background:rgba(88,166,255,0.5)"></i>Bollinger</span>' +
+        '<span><i class="sw" style="background:#d29922;border-bottom:1px dashed"></i>Fibonacci</span>' +
+        '<span><i class="sw" style="background:#f85149"></i>Möjlig vågstruktur*</span>' +
+        '</div>' +
+        '<div class="chartnote">*Vågmarkeringen är en enkel svängpunkts-heuristik (zigzag), INTE en ' +
+        'auktoritativ Elliott Wave-räkning — sådan går inte att beräkna objektivt, även proffs är ' +
+        'ofta oense. Volatilitetstratten (1M/3M) visar historisk rörlighet baserat på ATR, inte en ' +
+        'prognos om riktning. Ej investeringsrådgivning.</div>';
+
+    const canvas = div.querySelector('canvas');
+    setTimeout(() => drawChart(canvas, rec, CHART_STATE[key].range), 0);
+
+    div.querySelectorAll('button[data-range]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            CHART_STATE[key].range = btn.dataset.range;
+            div.querySelectorAll('button[data-range]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            drawChart(canvas, rec, CHART_STATE[key].range);
+        });
+    });
+
+    window.addEventListener('resize', () => drawChart(canvas, rec, CHART_STATE[key].range));
+    return div;
+}
 
 function buildSettingsPanel() {
     const groups = {};

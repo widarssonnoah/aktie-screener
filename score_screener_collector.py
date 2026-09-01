@@ -527,6 +527,15 @@ footer{margin-top:24px;color:#6e7681;font-size:11px;text-align:center;}
 .count{color:var(--muted);font-size:12px;}
 textarea{width:100%;background:#010409;border:1px solid var(--border);color:var(--text);
          border-radius:7px;padding:8px;font-size:11px;font-family:monospace;min-height:70px;}
+         .chartwrap{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;}
+.chartcontrols{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.chartcontrols button{padding:4px 10px;font-size:11px;}
+.chartcontrols button.active{background:#238636;border-color:#2ea043;color:#fff;}
+.chartcanvas{width:100%;height:260px;display:block;}
+.chartlegend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--muted);margin-top:6px;}
+.chartlegend span{display:inline-flex;align-items:center;gap:4px;}
+.chartlegend .sw{width:10px;height:3px;display:inline-block;border-radius:2px;}
+.chartnote{font-size:10.5px;color:#6e7681;margin-top:6px;line-height:1.4;}
 """
 
 _JS = r"""

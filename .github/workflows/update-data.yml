@@ -30,7 +30,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run screener collector
-        run: python score_screener_collector.py
+        run: python score_screener_collector.py --workers 2
 
       - name: Publish HTML as index.html
         run: |

@@ -244,6 +244,30 @@ def extract_technical_metrics(tc: TickerCache, i: int, min_vol: float) -> Option
     clean = {k: round(float(v), 4) for k, v in vals.items() if v is not None and not np.isnan(v)}
     clean['_Kurs'] = round(float(kurs), 4)
     return clean
+    def extract_chart_series(tc: TickerCache, i: int, lookback: int = 200) -> dict:
+    """
+    Komprimerad priskurve-historik för graf-funktionen i webbläsaren.
+    Endast stängningskurs + volym sparas (inte OHLC) för att hålla
+    filstorleken hanterbar över ~1100+ aktier. Alla tekniska overlays
+    (EMA/SMA/Bollinger/Fibonacci/zigzag) beräknas sedan direkt i
+    JavaScript utifrån denna serie, så ingen ytterligare data behöver
+    skickas med.
+    """
+    start = max(0, i - lookback + 1)
+    close_slice = tc.close_arr[start:i + 1]
+    vol_slice = tc.vol_arr[start:i + 1]
+    dates_slice = tc.dates[start:i + 1]
+
+    if len(close_slice) < 20:
+        return None
+
+    close_list = [round(float(c), 4) if not np.isnan(c) else None for c in close_slice]
+    vol_list = [int(v) if not np.isnan(v) else None for v in vol_slice]
+
+    d0 = str(pd.Timestamp(dates_slice[0]).date())
+    d1 = str(pd.Timestamp(dates_slice[-1]).date())
+
+    return {'c': close_list, 'v': vol_list, 'd0': d0, 'd1': d1}
 
 
 # ════════════════════════════════════════════════════════════════════════════

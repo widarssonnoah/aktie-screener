@@ -1014,6 +1014,7 @@ function renderTable() {
             const td = document.createElement('td');
             td.colSpan = 7;
             td.appendChild(renderChartBlock(s.rec));
+            td.appendChild(renderPresetFitBlock(s.rec));
             const grid = document.createElement('div');
             grid.className = 'detailgrid';
             const active = getActiveMetrics();
@@ -1094,34 +1095,37 @@ const PRESETS = {
     'Dist_SMA200':  {lo: 2,  hi: 20, w: 1},
   },
   turnaround: {
- "p12m": {"lo": -65, "hi": -15, "w": 2},
- "p6m": {"lo": -45, "hi": -20, "w": 1.3},
- "RSI14": {"lo": 30, "hi": 50, "w": 1.8},
- "RSI_slope5": {"lo": 2, "hi": 25, "w": 1.8},
- "Dist_EMA9": {"lo": -5, "hi": 5, "w": 1},
- "Dist_EMA21": {"lo": -10, "hi": 3, "w": 1},
- "Dist_EMA50": {"lo": -25, "hi": 3, "w": 0.8},
- "Dist_EMA200": {"lo": -50, "hi": -3, "w": 0.5},
- "Dist_SMA50": {"lo": -25, "hi": 3, "w": 0.6},
- "Dist_SMA200": {"lo": -45, "hi": -3, "w": 0.5},
- "DI_diff": {"lo": -5, "hi": 20, "w": 1.8},
- "ADX": {"lo": 10, "hi": 32, "w": 1},
- "RS_acc": {"lo": 0, "hi": 20, "w": 1.5},
- "RS21": {"lo": -15, "hi": 25, "w": 1},
- "CMF": {"lo": 0.05, "hi": 0.35, "w": 1.8},
- "OBV_diff_pct": {"lo": 3, "hi": 30, "w": 1.8},
- "UpDnVol": {"lo": 1.3, "hi": 4, "w": 1.8},
- "VolRatio": {"lo": 1.2, "hi": 4, "w": 1},
- "BB_pctB": {"lo": 0.1, "hi": 0.55, "w": 1.2},
- "StochK": {"lo": 15, "hi": 50, "w": 1},
- "StochD": {"lo": 15, "hi": 50, "w": 0.8},
- "Squeeze": {"lo": 1, "hi": 1, "w": 1},
- "Dist_52wLow": {"lo": 3, "hi": 30, "w": 1.5},
- "Dist_52wHigh": {"lo": -70, "hi": -20, "w": 1},
- "p1w": {"lo": 0, "hi": 12, "w": 1},
- "p1m": {"lo": -8, "hi": 20, "w": 0.8},
- "p3m": {"lo": -35, "hi": 8, "w": 0.6}
-}
+    'RSI14': {lo: 35, hi: 52, w: 1.5},
+    'RSI_slope5': {lo: 5, hi: 30, w: 1.5},
+    'StochK': {lo: 20, hi: 55, w: 1},
+    'StochD': {lo: 20, hi: 55, w: 1},
+    'CMF': {lo: 0.03, hi: 0.35, w: 1.5},
+    'OBV_diff_pct': {lo: 0, hi: 20, w: 1},
+    'UpDnVol': {lo: 1.1, hi: 3, w: 1},
+    'VolRatio': {lo: 1.1, hi: 2.8, w: 1},
+    'Dist_52wLow': {lo: 0, hi: 25, w: 1},
+    'Dist_52wHigh': {lo: -65, hi: -15, w: 0.5},
+    'p1w': {lo: 0, hi: 10, w: 1},
+    'p1m': {lo: -8, hi: 15, w: 1},
+    'p3m': {lo: -40, hi: 5, w: 0.5},
+    'ADX': {lo: 10, hi: 28, w: 0.5},
+    'DI_diff': {lo: -5, hi: 15, w: 1},
+    'Dist_SMA50': {lo: -15, hi: 5, w: 1},
+    'Dist_EMA21': {lo: -10, hi: 5, w: 1},
+    'BB_pctB': {lo: 0.2, hi: 0.65, w: 1},
+    'DebtToEquity': {lo: 0, hi: 150, w: 0.5},
+    'CurrentRatio': {lo: 0.8, hi: 4, w: 0.5},
+  },
+  turnaround_tidig: {
+    'Dist_EMA9': {lo: -8, hi: 2, w: 2},
+    'Dist_EMA21': {lo: -12, hi: -1, w: 1.8},
+    'Dist_EMA50': {lo: -25, hi: -1, w: 1.8},
+    'RSI_slope5': {lo: 1, hi: 15, w: 1.5},
+    'RS_acc': {lo: 0, hi: 12, w: 1.3},
+    'RSI14': {lo: 25, hi: 68, w: 0.8},
+    'p1w': {lo: -15, hi: 15, w: 0.6},
+    'VolRatio': {lo: 0.6, hi: 5, w: 0.5},
+  },
   breakout: {
     'BB_bw': {lo: 0.01, hi: 0.08, w: 1.5},
     'Squeeze': {lo: 1, hi: 1, w: 1.5},
@@ -1230,6 +1234,57 @@ function applyPreset(name) {
     renderTable();
 }
 
+const PRESET_LABELS = {
+    value: 'Klassisk value',
+    turnaround: 'Turnaround-kandidater',
+    turnaround_tidig: 'Turnaround — Tidig fas',
+    breakout: 'Breakout',
+    trend: 'Trendföljande',
+    stable: 'Stora stabila bolag',
+    dividend: 'Utdelning',
+    deepvalue: 'Deep value',
+    momentum: 'Momentum',
+};
+
+function scoreAgainstPreset(rec, presetConfig) {
+    let wsum = 0, ssum = 0, anyActive = false;
+    for (const key in presetConfig) {
+        const cfg = presetConfig[key];
+        if (cfg.lo === null || cfg.hi === null) continue;
+        anyActive = true;
+        const raw = rec.metrics.hasOwnProperty(key) ? rec.metrics[key] : null;
+        const sc = (raw === null || raw === undefined) ? 0 : metricScore(raw, cfg.lo, cfg.hi);
+        const w = (cfg.w === null || cfg.w === undefined || isNaN(cfg.w)) ? 1 : cfg.w;
+        wsum += w; ssum += sc * w;
+    }
+    return anyActive && wsum > 0 ? ssum / wsum : null;
+}
+
+function renderPresetFitBlock(rec) {
+    const rows = Object.keys(PRESETS).map(key => {
+        const score = scoreAgainstPreset(rec, PRESETS[key]);
+        return {key, label: PRESET_LABELS[key] || key, score};
+    }).filter(r => r.score !== null)
+      .sort((a, b) => b.score - a.score);
+
+    const div = document.createElement('div');
+    div.className = 'panel';
+    div.style.marginBottom = '10px';
+    div.style.padding = '10px 12px';
+    let html = '<h2 style="font-size:12.5px;margin-bottom:8px;">Passar bäst i dessa screeners</h2>';
+    html += '<div class="metricgrid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));">';
+    for (const r of rows) {
+        const col = scoreColor(r.score);
+        html += '<div class="mrow" style="justify-content:space-between;">' +
+                '<span class="mlabel">' + r.label + '</span>' +
+                '<b style="color:' + col + '">' + r.score.toFixed(1) + '</b>' +
+                '</div>';
+    }
+    html += '</div>';
+    div.innerHTML = html;
+    return div;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     window.METRICS_BY_KEY = {};
     for (const m of METRICS) METRICS_BY_KEY[m.key] = m;
@@ -1270,6 +1325,7 @@ def generate_html(records: list, datum_str: str) -> str:
                  '<select id="presetSelect"><option value="">— Välj ett preset —</option>'
                  '<option value="value">Klassisk value</option>'
                  '<option value="turnaround">Turnaround-kandidater</option>'
+                 '<option value="turnaround_tidig">Turnaround — Tidig fas</option>'
                  '<option value="breakout">Breakout — snart utbrott</option>'
                  '<option value="trend">Ren trendföljande</option>'
                  '<option value="stable">Stora stabila bolag — köp & håll</option>'

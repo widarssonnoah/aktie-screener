@@ -375,6 +375,7 @@ def fetch_fundamentals_batch(tickers: list, workers: int) -> dict:
 
     changed = False
     done = 0
+    kept_stale = 0
     t0 = time.time()
     if to_fetch:
         with ThreadPoolExecutor(max_workers=workers) as ex:
@@ -385,15 +386,30 @@ def fetch_fundamentals_batch(tickers: list, workers: int) -> dict:
                     data = fut.result()
                 except Exception:
                     data = {}
-                result[tk] = data
-                entry = dict(data)
-                entry['_date'] = today_str
-                cache[tk] = entry
-                changed = True
+                if data:
+                    # Lyckad hämtning — uppdatera cache och markera dagens datum
+                    result[tk] = data
+                    entry = dict(data)
+                    entry['_date'] = today_str
+                    cache[tk] = entry
+                    changed = True
+                else:
+                    # Misslyckad hämtning — behåll ev. tidigare goda data i cachen
+                    # (utan att uppdatera datumet), så vi försöker igen nästa körning
+                    # istället för att permanent tappa data som en gång fungerade.
+                    old = cache.get(tk)
+                    if old:
+                        result[tk] = {k: v for k, v in old.items() if k != '_date'}
+                        kept_stale += 1
+                    else:
+                        result[tk] = {}
                 done += 1
                 if done % 50 == 0 or done == len(to_fetch):
                     elapsed = time.time() - t0
                     print("   ... {}/{} klara ({:.0f}s)".format(done, len(to_fetch), elapsed))
+
+    if kept_stale > 0:
+        print("[INFO] {} tickers använde tidigare cachad data (dagens hämtning misslyckades för dem)".format(kept_stale))
 
     if changed:
         _save_fund_cache(cache)
@@ -531,8 +547,8 @@ _JS = r"""
 // Inom [lo,hi] = 100. Utanför avtar poängen enligt en sigmoid: långsamt
 // nära kanten, snabbast runt DECAY_MIDPOINT (mätt i antal intervallbredder
 // från kanten), och planar sedan ut mot 0 långt bort.
-const DECAY_STEEPNESS = 7;    // högre = skarpare "knä"
-const DECAY_MIDPOINT  = 0.65; // var (i intervallbredder) nedgången är som snabbast
+const DECAY_STEEPNESS = 10;   // högre = skarpare "knä"
+const DECAY_MIDPOINT  = 0.4;  // var (i intervallbredder) nedgången är som snabbast
 
 function metricScore(value, lo, hi) {
     if (value === null || value === undefined || isNaN(value)) return null;

@@ -547,8 +547,19 @@ _JS = r"""
 // Inom [lo,hi] = 100. Utanför avtar poängen enligt en sigmoid: långsamt
 // nära kanten, snabbast runt DECAY_MIDPOINT (mätt i antal intervallbredder
 // från kanten), och planar sedan ut mot 0 långt bort.
-const DECAY_STEEPNESS = 10;   // högre = skarpare "knä"
-const DECAY_MIDPOINT  = 0.4;  // var (i intervallbredder) nedgången är som snabbast
+let DECAY_STEEPNESS = 10;   // beräknas dynamiskt av updateHardness()
+let DECAY_MIDPOINT  = 0.4;  // beräknas dynamiskt av updateHardness()
+let HARDNESS = 70;          // 1 = hård gräns (ingen mjuk filtrering), 100 = mycket mjuk
+
+// Räknar om avklingningskurvans form utifrån hårdhets-reglaget (1-100).
+// t=0 (hårdhet 1)  -> mycket brant knä precis vid kanten (~binär på/av-poängsättning)
+// t=1 (hårdhet 100) -> mycket flack, förlåtande kurva som sträcker sig långt utanför intervallet
+function updateHardness(h) {
+    HARDNESS = Math.min(100, Math.max(1, h));
+    const t = (HARDNESS - 1) / 99;
+    DECAY_STEEPNESS = 1.2 + (45 - 1.2) * Math.pow(1 - t, 1.35);
+    DECAY_MIDPOINT = 0.02 + (2.5 - 0.02) * Math.pow(t, 5);
+}
 
 function metricScore(value, lo, hi) {
     if (value === null || value === undefined || isNaN(value)) return null;
@@ -1302,6 +1313,7 @@ function renderPresetFitBlock(rec) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    updateHardness(HARDNESS);
     window.METRICS_BY_KEY = {};
     for (const m of METRICS) METRICS_BY_KEY[m.key] = m;
     buildSettingsPanel();
@@ -1314,6 +1326,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('importSettingsBtn').addEventListener('click', importSettings);
     document.getElementById('clearBtn').addEventListener('click', clearAll);
     document.getElementById('presetSelect').addEventListener('change', (e) => applyPreset(e.target.value));
+    document.getElementById('hardnessSlider').addEventListener('input', (e) => {
+        const h = parseInt(e.target.value, 10);
+        document.getElementById('hardnessVal').textContent = h;
+        updateHardness(h);
+        renderTable();
+    });
     document.querySelectorAll('th[data-sort]').forEach(th => {
         th.addEventListener('click', () => {
             const key = th.dataset.sort;
@@ -1350,7 +1368,15 @@ def generate_html(records: list, datum_str: str) -> str:
                  '<option value="momentum">Momentum / aggressiv tillväxt</option>'
                  '</select>'
                  '<button id="clearBtn">Rensa alla intervall</button>'
+                 '<span style="display:flex;align-items:center;gap:6px;font-size:12px;">'
+                 'Hårdhet: <input type="range" id="hardnessSlider" min="1" max="100" value="70" '
+                 'style="width:100px;vertical-align:middle;" title="1 = hård gräns (endast poäng inom intervallet), '
+                 '100 = mycket mjuk avklingning långt utanför intervallet">'
+                 '<b id="hardnessVal" style="min-width:22px;display:inline-block;">70</b>'
+                 '</span>'
                  '</div>'
+                 '<div class="smallnote">Hårdhet styr hur snällt/strängt poäng ges till värden UTANFÖR idealintervallet — '
+                 'lågt värde = nästan bara poäng exakt inom intervallet, högt värde = generös avklingning långt bortom.</div>'
                  '<div id="settingsRoot"></div>'
                  '<div class="smallnote">Vikt (högra, smala fältet) är valfri — standard är 1. Högre vikt '
                  'väger tyngre i totalpoängen.</div>'

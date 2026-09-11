@@ -551,9 +551,9 @@ let DECAY_STEEPNESS = 10;   // beräknas dynamiskt av updateHardness()
 let DECAY_MIDPOINT  = 0.4;  // beräknas dynamiskt av updateHardness()
 let HARDNESS = 70;          // 1 = hård gräns (ingen mjuk filtrering), 100 = mycket mjuk
 
-// Räknar om avklingningskurvans form utifrån hårdhets-reglaget (1-100).
-// t=0 (hårdhet 1)  -> mycket brant knä precis vid kanten (~binär på/av-poängsättning)
-// t=1 (hårdhet 100) -> mycket flack, förlåtande kurva som sträcker sig långt utanför intervallet
+// Räknar om avklingningskurvans form utifrån mjukhets-reglaget (1-100).
+// t=0 (mjukhet 1)  -> mycket brant knä precis vid kanten (~binär på/av-poängsättning)
+// t=1 (mjukhet 100) -> mycket flack, förlåtande kurva som sträcker sig långt utanför intervallet
 function updateHardness(h) {
     HARDNESS = Math.min(100, Math.max(1, h));
     const t = (HARDNESS - 1) / 99;

@@ -95,6 +95,8 @@ METRIC_REGISTRY = [
     {'key': 'Dist_EMA200',  'label': 'Avstånd till EMA200',          'grupp': 'Teknisk', 'enhet': '%', 'dec': 1},
     {'key': 'Dist_SMA50',   'label': 'Avstånd till SMA50',           'grupp': 'Teknisk', 'enhet': '%', 'dec': 1},
     {'key': 'Dist_SMA200',  'label': 'Avstånd till SMA200',          'grupp': 'Teknisk', 'enhet': '%', 'dec': 1},
+    {'key': 'EMA9_vs_EMA21', 'label': 'EMA9 relativt EMA21 (negativ=under)', 'grupp': 'Teknisk', 'enhet': '%', 'dec': 2},
+    {'key': 'EMA9_Turning', 'label': 'EMA9 vände uppåt (1=ja, 0=nej)', 'grupp': 'Teknisk', 'enhet': '', 'dec': 0},
     {'key': 'RS21',         'label': 'Relativ styrka vs index (21d)', 'grupp': 'Teknisk', 'enhet': '', 'dec': 1},
     {'key': 'RS_acc',       'label': 'RS-acceleration',              'grupp': 'Teknisk', 'enhet': '',  'dec': 1},
     {'key': 'ATR_pct',      'label': 'ATR (volatilitet)',            'grupp': 'Teknisk', 'enhet': '%', 'dec': 1},
@@ -188,6 +190,24 @@ def extract_technical_metrics(tc: TickerCache, i: int, min_vol: float) -> Option
     atr14 = _g(tc.atr14, i)
     atr_pct = (atr14 / kurs * 100) if (not np.isnan(atr14) and kurs > 0) else np.nan
 
+    # ── Exakt replikering av "Tidig fas"-logiken i turnaround_screener.py ──
+    # Källan definierar Tidig fas som: kurs < EMA50 OCH EMA9 < EMA21 OCH
+    # EMA9 "bottnade" (var lägre för 5 dagar sedan än 10 dagar sedan, men
+    # har nu vänt upp). Dessa två nya nyckeltal gör det möjligt att uttrycka
+    # exakt samma villkor i Score Screener-presets.
+    e9_now   = _g(tc.ema9, i)
+    e21_now  = _g(tc.ema21, i)
+    e9_p5    = _g(tc.ema9, max(0, i - 5))
+    e9_p10   = _g(tc.ema9, max(0, i - 10))
+
+    ema9_vs_ema21 = np.nan
+    if not np.isnan(e9_now) and not np.isnan(e21_now) and e21_now > 0:
+        ema9_vs_ema21 = (e9_now / e21_now - 1) * 100   # negativ = EMA9 < EMA21
+
+    ema9_turning = np.nan
+    if not any(np.isnan(x) for x in (e9_now, e9_p5, e9_p10)):
+        ema9_turning = 1.0 if (e9_now > e9_p5 and e9_p5 < e9_p10) else 0.0
+
     lookback = min(252, i + 1)
     window = tc.close_arr[i - lookback + 1:i + 1]
     window = window[~np.isnan(window)]
@@ -210,6 +230,8 @@ def extract_technical_metrics(tc: TickerCache, i: int, min_vol: float) -> Option
         'Dist_EMA200':  dist(_g(tc.ema200, i)),
         'Dist_SMA50':   dist(_g(tc.sma50, i)),
         'Dist_SMA200':  dist(_g(tc.sma200, i)),
+        'EMA9_vs_EMA21': ema9_vs_ema21,
+        'EMA9_Turning':  ema9_turning,
         'RS21':         _g(tc.rs21, i),
         'RS_acc':       _g(tc.rs_acc, i),
         'ATR_pct':      atr_pct,
@@ -551,9 +573,9 @@ let DECAY_STEEPNESS = 10;   // beräknas dynamiskt av updateHardness()
 let DECAY_MIDPOINT  = 0.4;  // beräknas dynamiskt av updateHardness()
 let HARDNESS = 70;          // 1 = hård gräns (ingen mjuk filtrering), 100 = mycket mjuk
 
-// Räknar om avklingningskurvans form utifrån mjukhets-reglaget (1-100).
-// t=0 (mjukhet 1)  -> mycket brant knä precis vid kanten (~binär på/av-poängsättning)
-// t=1 (mjukhet 100) -> mycket flack, förlåtande kurva som sträcker sig långt utanför intervallet
+// Räknar om avklingningskurvans form utifrån hårdhets-reglaget (1-100).
+// t=0 (hårdhet 1)  -> mycket brant knä precis vid kanten (~binär på/av-poängsättning)
+// t=1 (hårdhet 100) -> mycket flack, förlåtande kurva som sträcker sig långt utanför intervallet
 function updateHardness(h) {
     HARDNESS = Math.min(100, Math.max(1, h));
     const t = (HARDNESS - 1) / 99;
@@ -976,6 +998,7 @@ function updateNACounts(scored) {
 function getFiltered() {
     const q = document.getElementById('searchBox').value.trim().toLowerCase();
     const land = document.getElementById('landFilter').value;
+    const cap = document.getElementById('capFilter').value;
     const minScore = parseFloat(document.getElementById('minScore').value) || 0;
     let scored = RECORDS.map(rec => {
         const r = computeRecordScore(rec);
@@ -985,6 +1008,7 @@ function getFiltered() {
     scored = scored.filter(s => {
         if (q && !(s.rec.Ticker.toLowerCase().includes(q) || s.rec.Namn.toLowerCase().includes(q))) return false;
         if (land && s.rec.Land !== land) return false;
+        if (cap && s.rec.Cap !== cap) return false;
         if (s.total !== null && s.total < minScore) return false;
         return true;
     });
@@ -1144,14 +1168,13 @@ const PRESETS = {
     'CurrentRatio': {lo: 0.8, hi: 4, w: 0.5},
   },
   turnaround_tidig: {
-    'Dist_EMA9': {lo: -8, hi: 2, w: 2},
-    'Dist_EMA21': {lo: -12, hi: -1, w: 1.8},
-    'Dist_EMA50': {lo: -25, hi: -1, w: 1.8},
-    'RSI_slope5': {lo: 1, hi: 15, w: 1.5},
-    'RS_acc': {lo: 0, hi: 12, w: 1.3},
-    'RSI14': {lo: 25, hi: 68, w: 0.8},
-    'p1w': {lo: -15, hi: 15, w: 0.6},
-    'VolRatio': {lo: 0.6, hi: 5, w: 0.5},
+    // EXAKT replikering av "🌱 Tidig"-fasen i turnaround_screener.py:
+    // kurs < EMA50  OCH  EMA9 < EMA21  OCH  EMA9 bottnade och vänder upp.
+    // Sätt Hårdhet lågt (nära 1) för att göra detta till en riktig hård
+    // gräns i stil med källans booleska AND-villkor.
+    'Dist_EMA50': {lo: -100, hi: -0.01, w: 2},
+    'EMA9_vs_EMA21': {lo: -100, hi: -0.01, w: 2},
+    'EMA9_Turning': {lo: 1, hi: 1, w: 2},
   },
   breakout: {
     'BB_bw': {lo: 0.01, hi: 0.08, w: 1.5},
@@ -1320,6 +1343,7 @@ document.addEventListener('DOMContentLoaded', () => {
     populateLandFilter();
     document.getElementById('searchBox').addEventListener('input', renderTable);
     document.getElementById('landFilter').addEventListener('change', renderTable);
+    document.getElementById('capFilter').addEventListener('change', renderTable);
     document.getElementById('minScore').addEventListener('input', renderTable);
     document.getElementById('exportBtn').addEventListener('click', exportCSV);
     document.getElementById('exportSettingsBtn').addEventListener('click', exportSettings);
@@ -1396,6 +1420,13 @@ def generate_html(records: list, datum_str: str) -> str:
     parts.append('<div class="toolbar">'
                  '<input type="text" id="searchBox" placeholder="Sök ticker eller namn...">'
                  '<select id="landFilter"><option value="">Alla länder</option></select>'
+                 '<select id="capFilter"><option value="">Allt börsvärde</option>'
+                 '<option value="micro">Micro</option>'
+                 '<option value="small">Small</option>'
+                 '<option value="mid">Mid</option>'
+                 '<option value="large">Large</option>'
+                 '<option value="mega">Mega</option>'
+                 '</select>'
                  '<span>Min. totalpoäng: <input type="number" id="minScore" value="0" style="width:55px"></span>'
                  '<button id="exportBtn">Exportera till CSV</button>'
                  '<span id="rowCount" class="count"></span>'

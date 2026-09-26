@@ -1170,10 +1170,11 @@ const PRESETS = {
   turnaround_tidig: {
     // EXAKT replikering av "🌱 Tidig"-fasen i turnaround_screener.py:
     // kurs < EMA50  OCH  EMA9 < EMA21  OCH  EMA9 bottnade och vänder upp.
-    // Sätt Hårdhet lågt (nära 1) för att göra detta till en riktig hård
-    // gräns i stil med källans booleska AND-villkor.
-    'Dist_EMA50': {lo: -100, hi: -0.01, w: 2},
-    'EMA9_vs_EMA21': {lo: -100, hi: -0.01, w: 2},
+    // Breddskalorna (lo/hi) är satta till realistiska procentnivåer för dessa
+    // mått, INTE godtyckligt breda — annars blir sigmoid-avklingningen fel
+    // skalad. Sätt Hårdhet lågt (nära 1-15) för en riktig hård gräns.
+    'Dist_EMA50': {lo: -20, hi: -0.01, w: 2},
+    'EMA9_vs_EMA21': {lo: -8, hi: -0.01, w: 2},
     'EMA9_Turning': {lo: 1, hi: 1, w: 2},
   },
   breakout: {

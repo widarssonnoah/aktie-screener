@@ -121,7 +121,6 @@ METRIC_REGISTRY = [
     {'key': 'PS',            'label': 'P/S-tal',                     'grupp': 'Fundamental', 'enhet': '',  'dec': 2},
     {'key': 'PEG',           'label': 'PEG-tal',                     'grupp': 'Fundamental', 'enhet': '',  'dec': 2},
     {'key': 'EV_EBITDA',     'label': 'EV/EBITDA',                   'grupp': 'Fundamental', 'enhet': '',  'dec': 1},
-    {'key': 'DivYield',      'label': 'Direktavkastning',            'grupp': 'Fundamental', 'enhet': '%', 'dec': 2},
     {'key': 'PayoutRatio',   'label': 'Utdelningsandel',             'grupp': 'Fundamental', 'enhet': '%', 'dec': 1},
     {'key': 'ROE',           'label': 'Avkastning på eget kapital',  'grupp': 'Fundamental', 'enhet': '%', 'dec': 1},
     {'key': 'ROA',           'label': 'Avkastning på totalt kapital', 'grupp': 'Fundamental', 'enhet': '%', 'dec': 1},
